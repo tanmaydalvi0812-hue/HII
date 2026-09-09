@@ -17,71 +17,63 @@ FOOTER = "DM FOR INFO\n@KINGxHREE"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Send 3 demo/test lines:\n\n"
-        "USERNAME\n"
-        "PASSWORD\n"
-        "2FA KEY\n\n"
-        "Example:\n"
-        "demo_user\n"
-        "demo_password\n"
-        "AAAA BBBB CCCC DDDD"
+        "Send 3 lines of non-sensitive demo data:\n\n"
+        "LINE 1\n"
+        "LINE 2\n"
+        "LINE 3"
     )
 
 
 async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    lines = text.splitlines()
 
     if len(lines) != 3:
         await update.message.reply_text(
-            "❌ Please send exactly 3 lines:\n\n"
-            "USERNAME\n"
-            "PASSWORD\n"
-            "2FA KEY"
+            "❌ Please send exactly 3 lines."
         )
         return
 
-    username, password, twofa = lines
+    line1 = lines[0].strip()
+    line2 = lines[1].strip()
 
-    # Demo/test values only.
-    if username == "demo_user" and password == "demo_password":
-        pass
-    else:
-        await update.message.reply_text(
-            "❌ This demo bot accepts only the example/test values:\n\n"
-            "demo_user\n"
-            "demo_password\n"
-            "AAAA BBBB CCCC DDDD"
-        )
-        return
+    # Preserve line 3 exactly as entered, including spaces.
+    line3 = lines[2].strip()
+
+    result = (
+        f"LINE 1: {line1}\n"
+        f"LINE 2: {line2}\n"
+        f"LINE 3: {line3}\n\n"
+        f"{FOOTER}"
+    )
 
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "📋 COPY USERNAME",
-                callback_data="copy_username"
+                "📋 COPY LINE 1",
+                callback_data="copy_1"
             )
         ],
         [
             InlineKeyboardButton(
-                "📋 COPY PASSWORD",
-                callback_data="copy_password"
+                "📋 COPY LINE 2",
+                callback_data="copy_2"
             )
         ],
         [
             InlineKeyboardButton(
-                "📋 COPY 2FA KEY",
-                callback_data="copy_2fa"
+                "📋 COPY LINE 3",
+                callback_data="copy_3"
             )
         ],
     ])
 
-    result = (
-        f"USERNAME: {username}\n"
-        f"PASSWORD: {password}\n"
-        f"2FA KEY: {twofa}\n\n"
-        f"{FOOTER}"
-    )
+    # Store only temporarily for this chat interaction.
+    context.user_data["formatted_values"] = [
+        line1,
+        line2,
+        line3,
+    ]
 
     await update.message.reply_text(
         result,
@@ -89,22 +81,30 @@ async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def copy_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def copy_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    values = {
-        "copy_username": "demo_user",
-        "copy_password": "demo_password",
-        "copy_2fa": "AAAA BBBB CCCC DDDD",
+    values = context.user_data.get("formatted_values", [])
+
+    mapping = {
+        "copy_1": 0,
+        "copy_2": 1,
+        "copy_3": 2,
     }
 
-    value = values.get(query.data)
+    index = mapping.get(query.data)
 
-    if value:
-        # Telegram bots cannot directly write to a user's clipboard.
-        # Instead, send the value so the user can copy it normally.
-        await query.message.reply_text(f"`{value}`", parse_mode="Markdown")
+    if index is None or index >= len(values):
+        await query.message.reply_text("❌ Data expired.")
+        return
+
+    value = values[index]
+
+    await query.message.reply_text(
+        f"`{value}`",
+        parse_mode="MarkdownV2"
+    )
 
 
 def main():
@@ -125,7 +125,7 @@ def main():
     )
 
     app.add_handler(
-        CallbackQueryHandler(copy_button)
+        CallbackQueryHandler(copy_value)
     )
 
     print("Bot is running...")
